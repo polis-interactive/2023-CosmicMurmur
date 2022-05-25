@@ -21,38 +21,8 @@ func (p *Point) IsEqual(pPrime Point) bool {
 }
 
 type Grid struct {
-	MinX       int
-	MaxX       int
-	MinY       int
-	MaxY       int
-	hasBeenSet bool
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func (g *Grid) TrySetMinMax(p Point) {
-	if !g.hasBeenSet {
-		g.MinX = p.X
-		g.MinY = p.Y
-		g.MaxX = p.X
-		g.MaxY = p.Y
-		g.hasBeenSet = true
-		return
-	}
-	g.MinX = min(g.MinX, p.X)
-	g.MinY = min(g.MinY, p.Y)
-	g.MaxX = max(g.MaxX, p.X)
-	g.MaxY = max(g.MaxY, p.Y)
+	MinX int
+	MaxX int
+	MinY int
+	MaxY int
 }

@@ -3,14 +3,14 @@ package bus
 import "github.com/polis-interactive/2023-CosmicMurmur/internal/domain"
 
 type bus struct {
-	*eventHandler
+	*eventBus
 	graphicsService domain.GraphicsService
 }
 
 func NewBus() *bus {
 	h := newEventHandler()
 	return &bus{
-		eventHandler: h,
+		eventBus: h,
 	}
 }
 

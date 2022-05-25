@@ -15,7 +15,7 @@ type callbackProxy struct {
 	next *callbackProxy
 }
 
-type eventHandler struct {
+type eventBus struct {
 	lastEventId int
 	pubSubMap   map[domain.Event]*callbackProxy
 	idEventMap  map[int]domain.Event
@@ -25,10 +25,10 @@ type eventHandler struct {
 	shutdowns   chan struct{}
 }
 
-var _ domain.EventHandler = (*eventHandler)(nil)
+var _ domain.EventHandler = (*eventBus)(nil)
 
-func newEventHandler() *eventHandler {
-	return &eventHandler{
+func newEventHandler() *eventBus {
+	return &eventBus{
 		lastEventId: 0,
 		pubSubMap:   make(map[domain.Event]*callbackProxy),
 		idEventMap:  make(map[int]domain.Event),
@@ -39,57 +39,57 @@ func newEventHandler() *eventHandler {
 	}
 }
 
-func (h *eventHandler) SubscribeToEvent(e domain.Event, fn func()) int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (b *eventBus) SubscribeToEvent(e domain.Event, fn func()) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	log.Println(fmt.Sprintf(
 		"Bus, EventHandler, SubscribeToEvent: subscribing to %s, giving id %d",
 		e.String(),
-		h.lastEventId,
+		b.lastEventId,
 	))
 	newCallback := &callbackProxy{
-		id:   h.lastEventId,
+		id:   b.lastEventId,
 		fn:   fn,
 		next: nil,
 	}
-	h.idEventMap[h.lastEventId] = e
-	if callback, ok := h.pubSubMap[e]; ok {
+	b.idEventMap[b.lastEventId] = e
+	if callback, ok := b.pubSubMap[e]; ok {
 		for callback.next != nil {
 			callback = callback.next
 		}
 		callback.next = newCallback
 	} else {
-		h.pubSubMap[e] = &callbackProxy{
+		b.pubSubMap[e] = &callbackProxy{
 			id:   -1,
 			fn:   nil,
 			next: newCallback,
 		}
 	}
-	h.lastEventId += 1
-	return h.lastEventId
+	b.lastEventId += 1
+	return b.lastEventId
 }
 
-func (h *eventHandler) UnsubscribeToEvent(handlerId int) {
+func (b *eventBus) UnsubscribeToEvent(handlerId int) {
 	log.Println(fmt.Sprintf("Bus, EventHandler, UnsubscribeToEvent: unsubscribing id %d", handlerId))
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	// invalid handlerId
-	if handlerId > h.lastEventId || handlerId < 0 {
+	if handlerId > b.lastEventId || handlerId < 0 {
 		return
 	}
 	// short circuit if we've already removed the id
-	if _, ok := h.idEventMap[handlerId]; !ok {
+	if _, ok := b.idEventMap[handlerId]; !ok {
 		return
 	}
-	eventType := h.idEventMap[handlerId]
-	delete(h.idEventMap, handlerId)
+	eventType := b.idEventMap[handlerId]
+	delete(b.idEventMap, handlerId)
 
 	// short circuit if the pubSub map for event type
 	// is missing
-	if _, ok := h.pubSubMap[eventType]; !ok {
+	if _, ok := b.pubSubMap[eventType]; !ok {
 		return
 	}
-	callback := h.pubSubMap[eventType]
+	callback := b.pubSubMap[eventType]
 	// search for the callback with id handlerId
 	// to remove
 	var removeCallback *callbackProxy = nil
@@ -108,48 +108,48 @@ func (h *eventHandler) UnsubscribeToEvent(handlerId int) {
 	// cleanup if necessary; can be an orphaned pubSub entry,
 	// or we only had the removed callback in the list
 	if callback.id == -1 && callback.next == nil {
-		delete(h.pubSubMap, eventType)
+		delete(b.pubSubMap, eventType)
 	}
 }
 
-func (h *eventHandler) HandleEvent(e domain.Event) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if h.eventQueue != nil {
-		h.eventQueue <- e
+func (b *eventBus) HandleEvent(e domain.Event) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.eventQueue != nil {
+		b.eventQueue <- e
 	}
 }
 
-func (h *eventHandler) startupEventLoop() {
+func (b *eventBus) startupEventLoop() {
 	log.Println("Bus, EventHandler, startupEventLoop: starting")
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.shutdowns == nil {
-		h.shutdowns = make(chan struct{})
-		h.wg.Add(1)
-		go h.runEventLoop()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.shutdowns == nil {
+		b.shutdowns = make(chan struct{})
+		b.wg.Add(1)
+		go b.runEventLoop()
 	}
 }
 
-func (h *eventHandler) shutdownEventLoop() {
+func (b *eventBus) shutdownEventLoop() {
 	log.Println("Bus, EventHandler, startupEventLoop: shutting down")
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.shutdowns != nil {
-		close(h.shutdowns)
-		h.wg.Wait()
-		h.shutdowns = nil
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.shutdowns != nil {
+		close(b.shutdowns)
+		b.wg.Wait()
+		b.shutdowns = nil
 	}
 }
 
-func (h *eventHandler) runEventLoop() {
+func (b *eventBus) runEventLoop() {
 	for {
-		err := h.doRunEventLoop()
+		err := b.doRunEventLoop()
 		if err != nil {
 			log.Println(fmt.Sprintf("Bus EventHandler, runEventLoop: received error; %s", err.Error()))
 		}
 		select {
-		case _, ok := <-h.shutdowns:
+		case _, ok := <-b.shutdowns:
 			if !ok {
 				goto CloseEventLoop
 			}
@@ -159,31 +159,31 @@ func (h *eventHandler) runEventLoop() {
 	}
 CloseEventLoop:
 	log.Println("Bus EventHandler, runEventLoop: closed")
-	h.wg.Done()
+	b.wg.Done()
 }
 
-func (h *eventHandler) doRunEventLoop() error {
+func (b *eventBus) doRunEventLoop() error {
 	// create event queue
 	func() {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		if h.eventQueue != nil {
-			h.eventQueue = nil
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.eventQueue != nil {
+			b.eventQueue = nil
 		}
 		// shouldn't have too many events, 20 seems like a sane default
-		h.eventQueue = make(chan domain.Event, 20)
+		b.eventQueue = make(chan domain.Event, 20)
 	}()
 	for {
 		select {
-		case _, ok := <-h.shutdowns:
+		case _, ok := <-b.shutdowns:
 			if !ok {
 				return nil
 			}
-		case e, ok := <-h.eventQueue:
+		case e, ok := <-b.eventQueue:
 			if !ok {
 				return errors.New("event queue unexpectedly closed")
 			} else {
-				err := h.doHandleEvent(e)
+				err := b.doHandleEvent(e)
 				if err != nil {
 					return errors.New(fmt.Sprintf(
 						"error handling event: %s; recieved error: %s",
@@ -196,20 +196,20 @@ func (h *eventHandler) doRunEventLoop() error {
 	}
 }
 
-func (h *eventHandler) doHandleEvent(e domain.Event) (err error) {
-	h.mu.RLock()
+func (b *eventBus) doHandleEvent(e domain.Event) (err error) {
+	b.mu.RLock()
 	defer func() {
 		// recover from panic if one occurred. Set err to nil otherwise.
 		if recover() != nil {
 			err = errors.New("array index out of bounds")
 		}
-		h.mu.RUnlock()
+		b.mu.RUnlock()
 	}()
-	if _, ok := h.pubSubMap[e]; !ok {
+	if _, ok := b.pubSubMap[e]; !ok {
 		log.Println(fmt.Sprintf("Bus EventHandler, doHandleEvent: no handlers for event %s", e.String()))
 		return nil
 	}
-	callback := h.pubSubMap[e]
+	callback := b.pubSubMap[e]
 	for callback != nil {
 		if callback.id != -1 {
 			callback.fn()

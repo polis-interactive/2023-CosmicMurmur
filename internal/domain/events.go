@@ -9,6 +9,8 @@ const (
 	RenderUpdated
 	StartedDMXConsole
 	StoppedDmxConsole
+	GraphicsCrashed
+	GraphicsReady
 )
 
 func (s Event) String() string {
@@ -25,6 +27,10 @@ func (s Event) String() string {
 		return "Started DMX Console"
 	case StoppedDmxConsole:
 		return "Stopped DMX Console"
+	case GraphicsCrashed:
+		return "Graphics Crashed"
+	case GraphicsReady:
+		return "Graphics Ready"
 	}
 	return "UNHANDLED_EVENT"
 }

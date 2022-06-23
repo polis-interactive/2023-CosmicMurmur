@@ -1,8 +1,6 @@
 
 /*
 
-.idea/
-
 !/.gitignore
 
 !/go.mod
@@ -17,4 +15,4 @@
 
 !/api/
 
-!makefile
+!documentation

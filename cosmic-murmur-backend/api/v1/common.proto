@@ -1,0 +1,19 @@
+
+syntax = "proto3";
+
+package CosmicMurmurBackend.v1.common;
+
+option go_package = "github.com/polis-interactive/2023-CosmicMurmur/api/v1/go/common;grpcCommon";
+
+message EmptyRequest {}
+
+message EmptyResponse {}
+
+message successFailure {
+  bool Success = 1;
+  string Error = 2;
+}
+
+message DefaultResponse {
+  successFailure Status = 1;
+}

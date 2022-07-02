@@ -1,0 +1,14 @@
+[Unit]
+Description=Cosmic Murmur Program
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+ExecStart=/home/snuc/bin/script_autostart
+KillSignal=SIGQUIT
+
+[Install]
+WantedBy=cosmic_murmur.target

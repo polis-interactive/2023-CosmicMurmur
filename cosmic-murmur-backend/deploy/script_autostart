@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "Starting window manager"
+
+xvfb-run /home/pi/slate-1/main
